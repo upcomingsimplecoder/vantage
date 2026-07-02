@@ -14,6 +14,10 @@ proprietary data.
 > investor-facing UI. It runs fully offline with zero API keys. See
 > [What's real vs. illustrative](#whats-real-vs-illustrative) for an honest boundary.
 
+![Vantage Deal Radar: a ranked feed of companies scored against the active investment thesis, each with a cited why-now and evidence chips](docs/assets/radar.png)
+
+<sub>The Deal Radar, scored live by claude-opus-4.8. Every score is thesis-relative and traces to a source signal. Screenshots below are of the running app, not mockups.</sub>
+
 ## Quickstart
 
 Requires Python 3.11+. No API keys. No external services. No Docker.
@@ -22,7 +26,7 @@ Requires Python 3.11+. No API keys. No external services. No Docker.
 git clone <repo-url> vantage && cd vantage
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python -m vantage.seed                                  # builds SQLite DB: 13 companies, 2 theses, 33 signals, 26 scores
+python -m vantage.seed                                  # builds SQLite DB: 13 companies, 2 theses, 33 signals, 26 scores, seeded pipeline
 uvicorn vantage.main:app --reload --port 8077
 ```
 
@@ -53,14 +57,20 @@ specific signal with its source.
 traction, timing, team, novelty, deal accessibility, and a subtracted risk score. Every positive and
 negative claim cites its source signal, so an investor can audit why the system flagged a deal.
 
+![Company profile for Aperture Health: the Vantage score with a why-now card, a seven-part score decomposition, and an evidence ledger where every point cites its source signal](docs/assets/company-profile.png)
+
 **4. Investment memo (`Generate Investment Memo`).** One click turns the score into a first-pass
 memo: a PURSUE/WATCH recommendation, a bull case and a bear case (each with cited sources), and
 diligence questions for the founder. It compresses the first hours of associate research into a
 sourced, inspectable brief.
 
+![Generated investment memo for Aperture Health: a WATCH recommendation with a bull case, a bear case, cited evidence, and founder diligence questions](docs/assets/memo.png)
+
 **5. Pipeline (`/pipeline`) and Jobs (`/api/jobs`).** A Kanban board tracks each company through the
 deal lifecycle. Logging a note re-scores the company, so the firm's own judgment feeds the loop. The
 Jobs and AI-outputs ledgers record every scoring run with versioned, auditable provenance.
+
+![Deal pipeline Kanban board tracking companies from Discovered through Watching, Prioritized, Contacted, and Meeting stages](docs/assets/pipeline.png)
 
 ## What's real vs. illustrative
 
@@ -206,6 +216,9 @@ docs/
 
 `python -m vantage.seed` is deterministic. It resets the database and rebuilds the same 33 signals,
 13 companies, and 26 scores every time, with zero duplicate companies (entity resolution verified).
+It also applies a realistic starting pipeline state (companies triaged across Watching, Prioritized,
+Contacted, and Meeting, with a few dated notes) so the board reflects a firm already using the tool.
+This runs after scoring and is purely presentational; it never shifts a score.
 Delete `vantage.db*` and re-seed any time for a clean slate.
 
 ---

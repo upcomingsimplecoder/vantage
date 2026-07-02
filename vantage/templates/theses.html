@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set active_nav = 'theses' %}
+{% block title %}Theses · Vantage{% endblock %}
+{% block heading %}Investment Theses{% endblock %}
+{% block subheading %}What the platform continuously sources against{% endblock %}
+
+{% block content %}
+{% for t in theses %}
+<div class="thesis-card">
+  <div style="display:flex;justify-content:space-between;align-items:start">
+    <h3>{{ t.name }}</h3>
+    <div style="text-align:right">
+      <a class="btn sm" href="/?thesis_id={{ t.id }}">View radar ({{ counts[t.id] }}) →</a>
+    </div>
+  </div>
+  <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">{{ t.description }}</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:12px">
+    <div>
+      <div style="color:var(--text-mute);margin-bottom:4px">Target sectors</div>
+      {% for s in t.target_sectors %}<span class="kw">{{ s }}</span>{% endfor %}
+      <div style="color:var(--text-mute);margin:10px 0 4px">Positive signals</div>
+      {% for k in t.positive_keywords %}<span class="kw">{{ k }}</span>{% endfor %}
+      <div style="color:var(--text-mute);margin:10px 0 4px">Exclusions</div>
+      {% for k in t.negative_keywords %}<span class="kw neg">{{ k }}</span>{% endfor %}
+    </div>
+    <div>
+      <div class="side-stat"><span class="k">Stage</span><span>{{ t.stage_preference or 'any' }}</span></div>
+      <div class="side-stat"><span class="k">Geography</span><span>{{ t.geography_preference|join(', ') or 'any' }}</span></div>
+      <div class="side-stat"><span class="k">Revenue band</span><span>{{ t.revenue_band or '-' }}</span></div>
+      <div class="side-stat"><span class="k">Status</span><span>{{ 'Active' if t.active else 'Paused' }}</span></div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

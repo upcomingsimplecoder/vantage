@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Vantage: Setup{% endblock %}
+{% block heading %}Welcome to Vantage{% endblock %}
+{% block content %}
+<div class="empty-state">
+  <div class="brand-mark" style="width:56px;height:56px;font-size:28px;margin:0 auto 20px">V</div>
+  <h2>No data yet. Seed the dataset</h2>
+  <p style="color:var(--text-dim);max-width:440px;margin:10px auto">
+    Run the seed command to load the curated corpus through the real ingestion,
+    entity-resolution, and scoring pipeline:
+  </p>
+  <p style="margin:18px 0"><code>python -m vantage.seed</code></p>
+  <p style="color:var(--text-mute);font-size:12px">Then refresh this page.</p>
+</div>
+{% endblock %}

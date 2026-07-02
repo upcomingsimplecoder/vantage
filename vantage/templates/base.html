@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Vantage{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css?v={{ asset_version() }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">V</div>
+      <div>
+        <div class="brand-name">Vantage</div>
+        <div class="brand-tag">Deal-Sourcing OS</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <a href="/" class="{% if active_nav=='radar' %}active{% endif %}"><span class="ico">◎</span> Deal Radar</a>
+      <a href="/theses" class="{% if active_nav=='theses' %}active{% endif %}"><span class="ico">◈</span> Theses</a>
+      <a href="/pipeline" class="{% if active_nav=='pipeline' %}active{% endif %}"><span class="ico">▤</span> Pipeline</a>
+      <a href="/api/jobs" class="{% if active_nav=='jobs' %}active{% endif %}"><span class="ico">⚙</span> Jobs / Audit</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="ai-badge">AI engine: <b>{{ settings.ai_mode }}</b></div>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1>{% block heading %}Vantage{% endblock %}</h1>
+        <div class="sub">{% block subheading %}{% endblock %}</div>
+      </div>
+      <div>{% block topactions %}{% endblock %}</div>
+    </div>
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% set active_nav = 'radar' %}
+{% block title %}{{ company.name }} · Vantage{% endblock %}
+{% block heading %}{{ company.name }}{% endblock %}
+{% block subheading %}{{ company.domain or '' }} · {{ company.hq_city or 'Location unknown' }}{% if company.employee_count %} · ~{{ company.employee_count }} employees{% endif %}{% endblock %}
+{% block topactions %}
+  <a class="btn primary" href="/companies/{{ company.id }}/memo?thesis_id={{ thesis.id if thesis }}">✦ Generate Investment Memo</a>
+{% endblock %}
+
+{% block content %}
+<div class="profile-grid">
+  <div>
+    <!-- AI Investment Summary -->
+    {% if score %}
+    <div class="panel">
+      <h3>AI Investment Summary · scored against “{{ thesis.name }}”</h3>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+        <div class="scoredisc {{ score_color(score.overall_score) }}" style="width:76px;height:76px;font-size:38px;border-radius:18px">{{ score.overall_score|int }}</div>
+        <div>
+          <span class="conf {{ score.confidence_label }}">{{ score.confidence_label }} confidence</span>
+          <div style="font-size:12px;color:var(--text-mute);margin-top:6px">
+            {{ score.model_name }} · prompt {{ score.prompt_version }} · formula {{ score.formula_version }}
+          </div>
+        </div>
+      </div>
+      {% if score.why_now %}
+        {% set wn = score.why_now %}
+        {% if wn.lower().startswith('why now:') %}{% set wn = wn[8:] %}{% endif %}
+        {% set wn = wn.rstrip('. ') %}
+        {% set triggers = wn.split('; ') %}
+        <div class="whynow-card">
+          <div class="eyebrow"><span class="spark">⚡</span> Why now</div>
+          <ul class="whynow-triggers">
+            {% for t in triggers %}<li>{{ t|trim|capitalize }}.</li>{% endfor %}
+          </ul>
+          {% if score.recommended_next_action %}
+          <div class="whynow-implication">Investor implication: {{ score.recommended_next_action }}</div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <div class="score-bars">
+        {% for label, val, is_risk in [
+            ('Thesis fit', score.fit_score, False),
+            ('Traction', score.traction_score, False),
+            ('Timing', score.timing_score, False),
+            ('Team', score.team_score, False),
+            ('Novelty', score.novelty_score, False),
+            ('Deal access', score.deal_accessibility_score, False),
+            ('Risk', score.risk_score, True)] %}
+        <div class="bar-row">
+          <div class="bar-label">{{ label }}</div>
+          <div class="bar-track"><div class="bar-fill {{ 'risk' if is_risk }}" style="width:{{ val }}%"></div></div>
+          <div class="bar-val">{{ val|int }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <p style="font-size:12px;color:var(--text-mute);margin-top:14px">{{ score.explanation }}</p>
+    </div>
+
+    <!-- Evidence: every claim cites its source -->
+    <div class="panel">
+      <h3>Evidence ledger: why this score</h3>
+      {% for e in score.positive_evidence %}
+      <div class="evidence-item">
+        <div class="ev-mark pos">+</div>
+        <div style="flex:1">
+          <div>{{ e.claim }}</div>
+          <div class="ev-src">source: {{ e.source or 'internal' }}{% if e.signal_id %} · signal {{ e.signal_id[:8] }}{% endif %}</div>
+        </div>
+        <span class="ev-weight">{{ e.weight }}</span>
+      </div>
+      {% endfor %}
+      {% for e in score.negative_evidence %}
+      <div class="evidence-item">
+        <div class="ev-mark neg">−</div>
+        <div style="flex:1">
+          <div>{{ e.claim }}</div>
+          <div class="ev-src">source: {{ e.source or 'internal' }}</div>
+        </div>
+        <span class="ev-weight">{{ e.weight }}</span>
+      </div>
+      {% endfor %}
+      {% if score.missing_data %}
+      <div style="margin-top:12px;font-size:12px;color:var(--text-mute)">
+        <b>Missing data (lowers confidence):</b>
+        <ul style="margin:6px 0 0 18px">{% for m in score.missing_data %}<li>{{ m }}</li>{% endfor %}</ul>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Signal timeline -->
+    <div class="panel">
+      <h3>Signal timeline · {{ signals|length }} signals</h3>
+      <div class="timeline">
+        {% for s in signals %}
+        <div class="tl-item">
+          <div class="tl-title">
+            <span class="sig-chip {{ s.signal_kind }}">{{ s.signal_kind or 'news' }}</span>
+            {{ s.title }}
+          </div>
+          <div class="tl-meta">{{ s.source_name }} · {{ (s.published_at or s.discovered_at).strftime('%b %d, %Y') }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right rail -->
+  <div>
+    <div class="panel">
+      <h3>Deal status</h3>
+      <form method="post" action="/companies/{{ company.id }}/status">
+        <input type="hidden" name="thesis_id" value="{{ thesis.id if thesis }}">
+        <select name="status" onchange="this.form.submit()">
+          {% for st in stages %}<option value="{{ st }}" {% if st==company.status %}selected{% endif %}>{{ stage_labels[st] }}</option>{% endfor %}
+        </select>
+      </form>
+      {% if score and score.recommended_next_action %}
+      <div style="margin-top:12px;font-size:13px;color:var(--text-dim)">→ {{ score.recommended_next_action }}</div>
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <h3>Snapshot</h3>
+      <div class="side-stat"><span class="k">Business model</span><span>{{ company.business_model or '-' }}</span></div>
+      <div class="side-stat"><span class="k">Sectors</span><span>{{ company.sectors|join(', ') or '-' }}</span></div>
+      <div class="side-stat"><span class="k">HQ</span><span>{{ company.hq_city or '-' }}</span></div>
+      <div class="side-stat"><span class="k">Employees</span><span>{{ company.employee_count or '-' }}</span></div>
+      <div class="side-stat"><span class="k">Website</span><span>{% if company.website_url %}<a href="{{ company.website_url }}" style="color:var(--accent)">{{ company.domain }}</a>{% else %}-{% endif %}</span></div>
+    </div>
+
+    {% if people %}
+    <div class="panel">
+      <h3>People</h3>
+      {% for p in people %}
+      <div class="person">
+        <div class="avatar">{{ p.name[0] }}</div>
+        <div><div style="font-size:13px;font-weight:600">{{ p.name }}</div><div style="font-size:11px;color:var(--text-mute)">{{ p.title }}</div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="panel">
+      <h3>Notes & interactions</h3>
+      <form method="post" action="/companies/{{ company.id }}/notes">
+        <input type="hidden" name="thesis_id" value="{{ thesis.id if thesis }}">
+        <textarea name="summary" placeholder="Met founder: strong product velocity, need customer refs..."></textarea>
+        <div class="form-row">
+          <select name="sentiment"><option value="positive">Positive</option><option value="neutral" selected>Neutral</option><option value="negative">Negative</option></select>
+          <button class="btn sm primary" type="submit">Log note</button>
+        </div>
+      </form>
+      <div style="margin-top:14px">
+        {% for i in interactions %}
+        <div class="evidence-item">
+          <div style="flex:1">
+            <div style="font-size:13px">{{ i.summary }}</div>
+            <div class="ev-src">{{ i.interaction_type }} · {{ i.occurred_at.strftime('%b %d') }}{% if i.sentiment %} · {{ i.sentiment }}{% endif %}</div>
+          </div>
+        </div>
+        {% else %}
+        <div style="font-size:12px;color:var(--text-mute)">No interactions yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

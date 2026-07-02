@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set active_nav = 'pipeline' %}
+{% block title %}Pipeline · Vantage{% endblock %}
+{% block heading %}Deal Pipeline{% endblock %}
+{% block subheading %}From discovery to invested, scored against “{{ thesis.name if thesis }}”{% endblock %}
+{% block topactions %}
+  <form method="get" action="/pipeline">
+    <select name="thesis_id" onchange="this.form.submit()">
+      {% for t in theses %}<option value="{{ t.id }}" {% if thesis and t.id==thesis.id %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+    </select>
+  </form>
+{% endblock %}
+
+{% block content %}
+<div class="board">
+  {% for st in stages %}
+  <div class="col">
+    <div class="col-head">
+      <span class="t">{{ stage_labels[st] }}</span>
+      <span class="n">{{ board[st]|length }}</span>
+    </div>
+    <div class="col-cards">
+      {% for r in board[st] %}
+      <a class="mini-card" href="/companies/{{ r.company.id }}{% if thesis %}?thesis_id={{ thesis.id }}{% endif %}">
+        <div class="mini-name">{{ r.company.name }}</div>
+        <div class="mini-foot">
+          <span style="font-size:11px;color:var(--text-mute)">{{ r.company.sectors[0] if r.company.sectors else '' }}</span>
+          {% if r.score %}<span class="mini-score {{ score_color(r.score.overall_score) }}">{{ r.score.overall_score|int }}</span>{% endif %}
+        </div>
+      </a>
+      {% else %}
+      <div style="font-size:11px;color:var(--text-mute);padding:8px 4px">-</div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

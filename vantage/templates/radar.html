@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set active_nav = 'radar' %}
+{% block title %}Deal Radar · Vantage{% endblock %}
+{% block heading %}Deal Radar{% endblock %}
+{% block subheading %}Ranked opportunities for “{{ thesis.name }}”{% endblock %}
+{% block topactions %}
+  <form method="get" action="/" style="display:flex;gap:8px;align-items:center">
+    <select name="thesis_id" onchange="this.form.submit()">
+      {% for t in theses %}
+        <option value="{{ t.id }}" {% if t.id==thesis.id %}selected{% endif %}>{{ t.name }}</option>
+      {% endfor %}
+    </select>
+  </form>
+{% endblock %}
+
+{% block content %}
+<div class="digest">
+  <div class="greet">Good morning. Here’s what changed in your market.</div>
+  <div class="headline">
+    <b>{{ digest.matches }}</b> companies strongly match your “{{ thesis.name }}” thesis
+    {% if digest.movers %}· <b>{{ digest.movers }}</b> showing hiring momentum{% endif %}
+  </div>
+  <div class="chips">
+    <span class="chip"><b>{{ rows|length }}</b> tracked</span>
+    <span class="chip"><b>{{ digest.matches }}</b> above bar (55+)</span>
+    <span class="chip"><b>{{ digest.movers }}</b> momentum movers</span>
+    <span class="chip"><b>{{ digest.followups }}</b> logged interactions</span>
+  </div>
+</div>
+
+<div class="controls">
+  <form method="get" action="/" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <input type="hidden" name="thesis_id" value="{{ thesis.id }}">
+    <label class="ctl">Min score
+      <input type="number" name="min_score" value="{{ min_score|int }}" min="0" max="100" step="5" style="width:70px" onchange="this.form.submit()">
+    </label>
+    <label class="ctl">Sector
+      <input type="text" name="sector" value="{{ sector }}" placeholder="any" style="width:120px" onchange="this.form.submit()">
+    </label>
+    <button class="btn sm ghost" type="submit">Apply</button>
+  </form>
+</div>
+
+<div class="feed">
+  {% for r in rows %}
+  {% set c = r.company %}{% set s = r.score %}
+  <div class="card">
+    <div class="scorebox">
+      <div class="scoredisc {{ score_color(s.overall_score) }}">{{ s.overall_score|int }}</div>
+      <div class="scorelbl">Vantage<br>score</div>
+      <span class="conf {{ s.confidence_label }}">{{ s.confidence_label }}</span>
+    </div>
+    <div class="card-body">
+      <div class="card-head">
+        <a href="/companies/{{ c.id }}?thesis_id={{ thesis.id }}" class="card-name">{{ c.name }}</a>
+        <span class="card-domain">{{ c.domain or '' }}</span>
+        <span class="status-pill {{ c.status }}">{{ stage_labels.get(c.status, c.status) }}</span>
+      </div>
+      <div class="card-desc">{{ c.description }}</div>
+      {% if s.why_now %}<div class="whynow">{{ s.why_now }}</div>{% endif %}
+      <div class="chips-row">
+        {% for e in s.positive_evidence[:4] %}
+          <span class="sig-chip">{{ e.claim }}</span>
+        {% endfor %}
+      </div>
+      <div class="card-foot">
+        <div class="next-action">→ <b>Next:</b> {{ s.recommended_next_action }}</div>
+        <div style="display:flex;gap:6px">
+          {% for sec in c.sectors[:2] %}<span class="sector-tag">{{ sec }}</span>{% endfor %}
+          <a class="btn sm" href="/companies/{{ c.id }}?thesis_id={{ thesis.id }}">Open →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

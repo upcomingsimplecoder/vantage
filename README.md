@@ -23,7 +23,7 @@ proprietary data.
 Requires Python 3.11+. No API keys. No external services. No Docker.
 
 ```bash
-git clone <repo-url> vantage && cd vantage
+git clone https://github.com/upcomingsimplecoder/vantage.git && cd vantage
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m vantage.seed                                  # builds SQLite DB: 13 companies, 2 theses, 33 signals, 26 scores, seeded pipeline

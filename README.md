@@ -117,7 +117,7 @@ SQLite (canonical graph: companies, signals, theses, scores, interactions, peopl
 - **Backend:** Python 3.11, FastAPI, SQLAlchemy 2.0
 - **Storage:** SQLite (WAL mode), swappable for Postgres via `VANTAGE_DATABASE_URL`
 - **UI:** server-rendered Jinja2 with a single hand-written stylesheet (dark, no build step)
-- **AI:** pluggable provider; deterministic heuristic default, OpenAI optional
+- **AI:** pluggable provider; deterministic heuristic default, live LLM via local proxy or hosted API optional
 
 ## Configuration
 
@@ -127,21 +127,34 @@ to `.env` only if you want to change something.
 | Env var | Default | Purpose |
 |---|---|---|
 | `VANTAGE_DATABASE_URL` | `sqlite:///./vantage.db` | Swap in Postgres, and so on. |
-| `VANTAGE_LLM_PROVIDER` | `heuristic` | Set to `openai` for live LLM scoring. |
-| `VANTAGE_LLM_API_KEY` | *(unset)* | Required only when provider is `openai`. |
-| `VANTAGE_LLM_MODEL` | `gpt-4o-mini` | Live model name. |
+| `VANTAGE_LLM_PROVIDER` | `heuristic` | `heuristic` (offline), `local` (OpenAI-compatible proxy), or `openai` (hosted). |
+| `VANTAGE_LLM_BASE_URL` | *(unset)* | Base URL of an OpenAI-compatible endpoint. When set, a live LLM is used with no API key. |
+| `VANTAGE_LLM_API_KEY` | *(unset)* | Required only for a hosted provider such as `openai`. |
+| `VANTAGE_LLM_MODEL` | `gpt-4o-mini` | Live model name (for example `claude-opus-4.8`). |
+| `VANTAGE_LLM_TIMEOUT` | `90` | Per-call timeout in seconds for the live provider. |
 | `VANTAGE_PROMPT_VERSION` | `p0-2024.06` | Stamped onto every score for provenance. |
 | `VANTAGE_SCORE_FORMULA_VERSION` | `v1` | Stamped onto every score for provenance. |
 
-**To enable live LLM scoring:**
+**To enable live LLM scoring via a local OpenAI-compatible proxy (no API key):**
+
+```bash
+export VANTAGE_LLM_PROVIDER=local
+export VANTAGE_LLM_BASE_URL=http://127.0.0.1:8800
+export VANTAGE_LLM_MODEL=claude-opus-4.8
+python rescore.py          # re-score every company through the live model
+```
+
+**Or via a hosted API:**
 
 ```bash
 export VANTAGE_LLM_PROVIDER=openai
 export VANTAGE_LLM_API_KEY=sk-...
-python -m vantage.seed          # re-score through the live model
+python rescore.py
 ```
 
-The UI banner will switch to `live:openai:gpt-4o-mini`. No other change required.
+The UI banner switches to `live: <model> via <where>`. The scoring contract is unchanged: the model
+proposes evidence-cited sub-scores and the backend still owns the deterministic aggregation formula.
+On any LLM error the pipeline falls back to the heuristic provider, so the app never hard-fails.
 
 ## API surface
 

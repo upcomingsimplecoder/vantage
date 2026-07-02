@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 
 from ..config import get_settings
@@ -168,47 +169,75 @@ class HeuristicProvider:
 
 
 class LiveLLMProvider:
-    """Calls a real LLM. Used only when VANTAGE_LLM_PROVIDER + key are set.
+    """Calls a real LLM over the OpenAI-compatible chat-completions protocol.
 
-    Falls back to the heuristic provider on any error.
+    Works against a hosted API (with a key) or a local proxy (no key needed),
+    selected via VANTAGE_LLM_BASE_URL. Falls back to the heuristic provider on
+    any error so the app never hard-fails on a network hiccup.
+
+    Design contract is unchanged: the LLM proposes evidence-cited sub-scores;
+    the backend (scoring.py) owns the deterministic aggregation formula.
     """
 
     def __init__(self, settings) -> None:
         self.settings = settings
-        self.name = f"{settings.llm_provider}:{settings.llm_model}"
+        self.name = f"{settings.llm_model}"
         self._fallback = HeuristicProvider()
 
     def score(self, company, thesis, signals, interactions) -> Judgment:
         try:
-            return self._call(company, thesis, signals, interactions)
+            data = self._chat_json(
+                _SYSTEM_PROMPT, _build_scoring_prompt(company, thesis, signals))
+            j = _judgment_from_json(data, self.name)
+            # Guard: an LLM must still cite evidence. If it returned none, blend
+            # in the heuristic's evidence so the ledger is never empty.
+            if not j.positive_evidence and not j.negative_evidence:
+                hb = self._fallback.score(company, thesis, signals, interactions)
+                j.positive_evidence = hb.positive_evidence
+                j.negative_evidence = hb.negative_evidence
+            return j
         except Exception as exc:  # noqa: BLE001
             j = self._fallback.score(company, thesis, signals, interactions)
             j.explanation = f"[LLM fallback: {exc}] " + j.explanation
             return j
 
-    def _call(self, company, thesis, signals, interactions) -> Judgment:
+    def draft_memo_prose(self, context: str) -> dict:
+        """Optional richer memo prose from the same structured inputs.
+
+        Returns {} on any failure so the caller keeps its structured memo.
+        """
+        try:
+            return self._chat_json(_MEMO_SYSTEM_PROMPT, context)
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def _chat_json(self, system: str, user: str) -> dict:
         import httpx  # local import; only needed on the live path
 
-        prompt = _build_scoring_prompt(company, thesis, signals)
-        if self.settings.llm_provider == "openai":
-            resp = httpx.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {self.settings.llm_api_key}"},
-                json={"model": self.settings.llm_model,
-                      "messages": [{"role": "system", "content": _SYSTEM_PROMPT},
-                                   {"role": "user", "content": prompt}],
-                      "response_format": {"type": "json_object"}, "temperature": 0.2},
-                timeout=60)
-            resp.raise_for_status()
-            data = json.loads(resp.json()["choices"][0]["message"]["content"])
-        else:
-            raise RuntimeError(f"provider {self.settings.llm_provider} not wired in prototype")
-        return _judgment_from_json(data, self.name)
+        headers = {"Content-Type": "application/json"}
+        if self.settings.llm_api_key:
+            headers["Authorization"] = f"Bearer {self.settings.llm_api_key}"
+        payload = {
+            "model": self.settings.llm_model,
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": user}],
+            "temperature": 0.2,
+            # Generous ceiling: reasoning models (e.g. claude-opus-4.8) spend
+            # hidden tokens before emitting JSON, so a tight cap truncates the
+            # object mid-write. 8000 leaves ample room for reasoning + payload.
+            "max_tokens": 8000,
+        }
+        url = f"{self.settings.resolved_base_url}/v1/chat/completions"
+        resp = httpx.post(url, headers=headers, json=payload,
+                          timeout=self.settings.llm_timeout)
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        return _extract_json(content)
 
 
 def get_provider():
     s = get_settings()
-    if s.llm_provider in {"openai", "anthropic"} and s.llm_api_key:
+    if s.uses_live_llm:
         return LiveLLMProvider(s)
     return HeuristicProvider()
 
@@ -261,14 +290,35 @@ def _next_action(fit: float, traction: float, deal_access: float, has_notes: boo
 
 
 _SYSTEM_PROMPT = (
-    "You are an investment-sourcing analyst. Score a company against a thesis. "
-    "Return STRICT JSON with integer sub-scores 0-100 for keys: fit_score, "
-    "traction_score, timing_score, team_score, novelty_score, "
-    "deal_accessibility_score, risk_score; plus confidence (0-1), "
-    "confidence_label, explanation, why_now, recommended_next_action, and arrays "
-    "positive_evidence/negative_evidence (each item {claim, weight, source, signal_id}), "
-    "missing_data, matched_criteria. Every score must be justified by evidence. "
-    "Never invent facts not present in the provided signals.")
+    "You are an investment-sourcing analyst scoring a company against a thesis. "
+    "You reply with ONE JSON object and nothing else: no markdown, no code "
+    "fences, no commentary, no extra keys beyond the schema given. All scores "
+    "are integers from 0 to 100. Base every score on the supplied signals; never "
+    "invent facts or metrics not present in the input. Keep evidence claims to "
+    "one short sentence each; at most 6 positive and 4 negative evidence items."
+)
+
+
+_SCHEMA_SKELETON = (
+    '{\n'
+    '  "fit_score": <int 0-100>,\n'
+    '  "traction_score": <int 0-100>,\n'
+    '  "timing_score": <int 0-100>,\n'
+    '  "team_score": <int 0-100>,\n'
+    '  "novelty_score": <int 0-100>,\n'
+    '  "deal_accessibility_score": <int 0-100>,\n'
+    '  "risk_score": <int 0-100>,\n'
+    '  "confidence": <float 0-1>,\n'
+    '  "confidence_label": "high|medium|low",\n'
+    '  "why_now": "<one sentence on the timing catalyst>",\n'
+    '  "explanation": "<one sentence justifying the scores>",\n'
+    '  "recommended_next_action": "<one sentence>",\n'
+    '  "matched_criteria": ["<thesis criteria this company meets>"],\n'
+    '  "missing_data": ["<key unknowns>"],\n'
+    '  "positive_evidence": [{"claim": "<short>", "weight": "high|medium|low", "source": "<source>"}],\n'
+    '  "negative_evidence": [{"claim": "<short>", "weight": "high|medium|low", "source": "<source>"}]\n'
+    '}'
+)
 
 
 def _build_scoring_prompt(company: dict, thesis: dict, signals: list[dict]) -> str:
@@ -277,11 +327,13 @@ def _build_scoring_prompt(company: dict, thesis: dict, signals: list[dict]) -> s
         f"from {s.get('source_name')}" for s in signals[:20]) or "- (no signals)"
     return (f"THESIS: {thesis.get('name')}\n{thesis.get('description')}\n"
             f"Target sectors: {thesis.get('target_sectors')}\n"
-            f"Positive: {thesis.get('positive_keywords')}  "
-            f"Negative: {thesis.get('negative_keywords')}\n\n"
+            f"Positive keywords: {thesis.get('positive_keywords')}  "
+            f"Negative keywords: {thesis.get('negative_keywords')}\n\n"
             f"COMPANY: {company.get('name')} ({company.get('domain')})\n"
             f"{company.get('description')}\nSectors: {company.get('sectors')}\n\n"
-            f"SIGNALS:\n{sig_lines}\n\nReturn the JSON now.")
+            f"SIGNALS:\n{sig_lines}\n\n"
+            f"Fill in exactly this JSON schema and output only the object:\n"
+            f"{_SCHEMA_SKELETON}")
 
 
 def _judgment_from_json(d: dict, model: str) -> Judgment:
@@ -302,3 +354,41 @@ def _judgment_from_json(d: dict, model: str) -> Judgment:
         matched_criteria=d.get("matched_criteria", []),
         recommended_next_action=d.get("recommended_next_action", ""),
         model_name=model)
+
+
+def _extract_json(content: str) -> dict:
+    """Parse a JSON object from an LLM reply.
+
+    Handles three shapes: raw JSON, a ```json fenced block, or JSON embedded in
+    surrounding prose (extracted by outermost-brace matching).
+    """
+    content = (content or "").strip()
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+    if fence:
+        try:
+            return json.loads(fence.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    start = content.find("{")
+    end = content.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        return json.loads(content[start:end + 1])
+    raise ValueError("no JSON object found in LLM response")
+
+
+_MEMO_SYSTEM_PROMPT = (
+    "You are an investment analyst writing a concise first-pass sourcing memo. "
+    "Work ONLY from the structured facts provided; never invent metrics. Return "
+    "STRICT JSON with keys: overview (2-3 sentences on what the company does and "
+    "why it fits the thesis), why_now (1-2 sentences on the timing catalyst), "
+    "bull_summary (2-3 sentences synthesizing the strongest positive evidence), "
+    "bear_summary (2-3 sentences on risks and unknowns, honest about missing "
+    "data), and questions_for_founder (array of 3-5 sharp diligence questions). "
+    "Keep it crisp and specific to the evidence."
+)

@@ -31,7 +31,7 @@
         <div class="whynow-card">
           <div class="eyebrow"><span class="spark">⚡</span> Why now</div>
           <ul class="whynow-triggers">
-            {% for t in triggers %}<li>{{ t|trim|capitalize }}.</li>{% endfor %}
+            {% for t in triggers %}{% set tt = t|trim %}<li>{{ tt[0]|upper }}{{ tt[1:] }}{% if not tt.endswith('.') %}.{% endif %}</li>{% endfor %}
           </ul>
           {% if score.recommended_next_action %}
           <div class="whynow-implication">Investor implication: {{ score.recommended_next_action }}</div>

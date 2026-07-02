@@ -61,8 +61,30 @@ def seed(reset: bool = True) -> dict:
                 scoring.score_company(db, company, thesis)
                 scored += 1
 
+        # Apply a realistic starting pipeline state (stages + a few notes), as if
+        # the firm has worked the top of the list for a few weeks. This runs AFTER
+        # scoring so it is purely presentational and never shifts a score.
+        from datetime import timedelta, timezone
+        from datetime import datetime as _dt
+        now = _dt.now(timezone.utc)
+        staged = notes_added = 0
+        for cname, state in seed_data.PIPELINE_STATE.items():
+            company = db.scalar(select(models.Company).where(
+                models.Company.normalized_name == normalize_name(cname)))
+            if not company:
+                continue
+            company.status = state["stage"]
+            staged += 1
+            for days_ago, sentiment, summary in state.get("notes", []):
+                db.add(models.Interaction(
+                    company_id=company.id, interaction_type="note",
+                    summary=summary, sentiment=sentiment,
+                    occurred_at=now - timedelta(days=days_ago)))
+                notes_added += 1
+        db.commit()
+
         return {**stats, "theses": len(theses), "companies_total": len(companies),
-                "scores": scored}
+                "scores": scored, "staged": staged, "notes": notes_added}
     finally:
         db.close()
 

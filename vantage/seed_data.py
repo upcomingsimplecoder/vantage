@@ -178,3 +178,52 @@ PEOPLE = {
     "Lexroom": [("Sarah Okonkwo", "Founder & CEO", "founder")],
     "Fathom Underwriting": [("James Whitfield", "Co-founder & CEO", "founder")],
 }
+
+
+# Starting pipeline state: as if the firm has been working the top of the list
+# for a few weeks. Applied AFTER scoring so it is purely presentational and does
+# not shift any score. Each note: (days_ago, sentiment, summary).
+# stage values must be members of STAGES in main.py.
+PIPELINE_STATE = {
+    "Attestable AI": {
+        "stage": "meeting_scheduled",
+        "notes": [
+            (2, "positive", "Intro call booked via Bessemer partner for next week. "
+                            "Maya (CEO) responsive; deep on healthcare compliance. "
+                            "Want ARR, NRR, and logo data before the call."),
+            (9, "positive", "Strongest fit on the thesis: $14M Series A, live HIPAA "
+                            "audit-evidence engine, and 5 enterprise AE reqs open."),
+        ],
+    },
+    "Aperture Health": {
+        "stage": "contacted",
+        "notes": [
+            (4, "positive", "Cold outreach sent to Priya. Hiring velocity is the "
+                            "tell: 4 implementation-engineer reqs in a short window "
+                            "reads as live enterprise deployments, not just funding."),
+        ],
+    },
+    "Ledgerly": {
+        "stage": "prioritized",
+        "notes": [
+            (6, "neutral", "Prioritized post-Series B. $40M round likely limits "
+                           "near-term entry; keep warm and re-evaluate next raise."),
+        ],
+    },
+    "Lexroom": {
+        "stage": "prioritized",
+        "notes": [
+            (7, "neutral", "AmLaw 100 pilot is the signal to watch. Re-evaluate on "
+                           "pilot-to-paid conversion before advancing."),
+        ],
+    },
+    "Fathom Underwriting": {"stage": "watching", "notes": []},
+    "Verano Insurance Tech": {"stage": "watching", "notes": []},
+    "Quill Data": {
+        "stage": "watching",
+        "notes": [
+            (5, "positive", "Top of the dev-infra thesis: OSS traction plus a new "
+                            "self-serve usage-based cloud is the monetization catalyst."),
+        ],
+    },
+}
